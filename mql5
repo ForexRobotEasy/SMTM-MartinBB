@@ -1,0 +1,108 @@
+
+// SMTM MartinBB Trading Robot
+// Developer: Forex Robot Easy Team (forexroboteasy.com)
+
+// Include necessary libraries
+#include <Trade\Trade.mqh>
+#include <Trade\PositionInfo.mqh>
+#include <Trade\SymbolInfo.mqh>
+
+// Define global variables
+CTrade trade;             // Trade class object
+int magicNumber = 123456; // Magic number for trade identification
+double stopLoss = 50.0;   // Stop loss value in points
+double lotSize;           // Lot size for trade
+
+// Function to calculate lot size based on market size
+double CalculateLotSize()
+{
+    double accountBalance = AccountInfoDouble(ACCOUNT_BALANCE);
+    double freeMargin = AccountInfoDouble(ACCOUNT_FREEMARGIN);
+    double marketSize = SymbolInfoDouble(_Symbol, SYMBOL_POINT) * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+
+    double maxLotSize = freeMargin / marketSize;
+
+    // Adjust the lot size based on market size
+    if (marketSize >= 0.01 && marketSize < 0.1)
+        lotSize = 0.01 * maxLotSize;
+    else if (marketSize >= 0.1 && marketSize < 1)
+        lotSize = 0.1 * maxLotSize;
+    else if (marketSize >= 1 && marketSize < 10)
+        lotSize = 1 * maxLotSize;
+    else if (marketSize >= 10 && marketSize < 100)
+        lotSize = 10 * maxLotSize;
+    else
+        lotSize = 0.01;
+
+    return lotSize;
+}
+
+// Function to open a trade
+void OpenTrade(int type)
+{
+    double currentPrice = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+    double slPrice = type == OP_BUY ? currentPrice - stopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT) : currentPrice + stopLoss * SymbolInfoDouble(_Symbol, SYMBOL_POINT);
+
+    // Send trade request
+    trade.Buy(lotSize, _Symbol, currentPrice, slPrice, 0, magicNumber);
+}
+
+// Function to close all trades
+void CloseAllTrades()
+{
+    CPositionInfo position;
+    while (position.SelectByTicket(trade.PositionGetTicket(0)))
+    {
+        trade.PositionClose(position.Ticket());
+    }
+}
+
+// Function to execute trades based on the defined parameters and strategies
+void ExecuteTrades()
+{
+    // Check current market conditions and adjust parameters accordingly
+    double marketSize = SymbolInfoDouble(_Symbol, SYMBOL_POINT) * SymbolInfoDouble(_Symbol, SYMBOL_TRADE_CONTRACT_SIZE);
+    if (marketSize >= 100)
+    {
+        stopLoss = 100.0;
+        lotSize = CalculateLotSize();
+    }
+    else if (marketSize >= 10 && marketSize < 100)
+    {
+        stopLoss = 50.0;
+        lotSize = CalculateLotSize();
+    }
+    else
+    {
+        stopLoss = 20.0;
+        lotSize = CalculateLotSize();
+    }
+
+    // Execute trades based on the Martin strategy
+    for (int i = 0; i < 5; i++)
+    {
+        if (trade.PositionsTotal() < i + 1)
+        {
+            if (i == 0)
+                OpenTrade(OP_BUY);
+            else if (i == 1)
+                OpenTrade(OP_SELL);
+            else if (i == 2)
+                OpenTrade(OP_BUY);
+            else if (i == 3)
+                OpenTrade(OP_SELL);
+            else if (i == 4)
+                OpenTrade(OP_BUY);
+        }
+    }
+}
+
+// Entry point of the program
+void OnStart()
+{
+    // Close all trades before executing new trades
+    CloseAllTrades();
+
+    // Execute trades based on the defined parameters and strategies
+    ExecuteTrades();
+}
